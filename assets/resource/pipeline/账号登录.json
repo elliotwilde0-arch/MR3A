@@ -141,9 +141,12 @@
     },
     "账号登录输入账号": {
         "action": {
-            "type": "Shell",
+            "type": "Custom",
             "param": {
-                "cmd": ""
+                "custom_action": "SecureTextInput",
+                "custom_action_param": {
+                    "field": "account"
+                }
             }
         },
         "post_delay": 600,
@@ -186,9 +189,12 @@
     },
     "账号登录输入密码": {
         "action": {
-            "type": "Shell",
+            "type": "Custom",
             "param": {
-                "cmd": ""
+                "custom_action": "SecureTextInput",
+                "custom_action_param": {
+                    "field": "password"
+                }
             }
         },
         "post_delay": 600,

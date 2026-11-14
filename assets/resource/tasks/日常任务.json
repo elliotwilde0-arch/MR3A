@@ -1444,23 +1444,7 @@
                     "verify": "^[\\x21-\\x26\\x28-\\x7E]{0,64}$",
                     "pattern_msg": "仅支持可见 ASCII 字符（不含空格/中文/单引号），最长 64 位"
                 }
-            ],
-            "pipeline_override": {
-                "账号登录输入账号": {
-                    "action": {
-                        "param": {
-                            "cmd": "input text '{账号}'"
-                        }
-                    }
-                },
-                "账号登录输入密码": {
-                    "action": {
-                        "param": {
-                            "cmd": "input text '{密码}'"
-                        }
-                    }
-                }
-            }
+            ]
         }
     }
 }
