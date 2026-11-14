@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
-"""账号登录（折中版）：Agent 直接读取客户端实例配置里的明文账号密码并输入。
+"""账号登录（自定义任务「启动游戏2」）：读取实例配置里的账号密码并输入。
 
-- 账号密码仍保存在 config/instances/*.json（客户端 UI 可编辑，明文）
-- 但不再通过 option 的 pipeline_override 注入 task param，所以：
-  - 客户端日志「任务管线合并」不含凭据
-  - MaaFramework 日志只看到 {"field":"password"}
-  - adb 进程命令行不含密码（stdin）
-- Agent 日志只记录字段名和长度。
+- 账号密码保存在 config/instances/*.json（客户端 UI 可编辑，明文）
+- 支持 task 级 option（启动游戏2）与旧版 sub_option（兼容）
+- 不进入 pipeline/task param；日志只记录字段名和长度
+- adb 输入走 stdin，密码不在进程命令行
 """
 
 from __future__ import annotations
@@ -56,17 +54,22 @@ def _instance_files() -> list[dict]:
 
 
 def _find_credentials() -> tuple[dict, dict | None]:
-    """返回 (凭据 data, 该实例的 AdbDevice)。"""
+    """返回 (凭据 data, 该实例的 AdbDevice)。
+
+    优先 task 级 option（启动游戏2），兼容旧版 请选择服务器.sub_options 里的账号密码。
+    """
     for inst in _instance_files():
         for task in inst.get("TaskItems", []):
-            if task.get("name") != "启动游戏":
-                continue
             for opt in task.get("option", []):
-                if opt.get("name") != "请选择服务器":
-                    continue
+                if opt.get("name") == "账号密码":
+                    data = opt.get("data") or {}
+                    if data:
+                        return data, inst.get("AdbDevice") or {}
                 for sub in opt.get("sub_options", []):
                     if sub.get("name") == "账号密码":
-                        return sub.get("data") or {}, inst.get("AdbDevice") or {}
+                        data = sub.get("data") or {}
+                        if data:
+                            return data, inst.get("AdbDevice") or {}
     return {}, None
 
 
