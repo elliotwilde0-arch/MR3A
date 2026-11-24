@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-"""账号登录（自定义任务「启动游戏2」）：读取实例配置里的账号密码并输入。
+"""账号登录（方案B）：自定义任务「启动游戏2」读取账号密码并输入。
 
-- 账号密码保存在 config/instances/*.json（客户端 UI 可编辑，明文）
-- 支持 task 级 option（启动游戏2）与旧版 sub_option（兼容）
-- 不进入 pipeline/task param；日志只记录字段名和长度
-- adb 输入走 stdin，密码不在进程命令行
+优先级：
+1. 当前实例里「启动游戏2」任务级 option「账号密码」的数据；
+2. 兼容旧版 sub_option；
+3. 独立文件 config/account_secret.json（升级/任务状态迁移后的兜底）。
+
+不进入 pipeline/task param；日志只记录字段名和长度；adb 输入走 stdin。
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from utils import logger
 from utils.runtime_paths import get_runtime_paths
 
 FIELD_TO_KEY = {"account": "账号", "password": "密码"}
+SECRET_FILE = "account_secret.json"
 
 
 def _clean(text: str) -> bool:
@@ -53,24 +56,41 @@ def _instance_files() -> list[dict]:
     return out
 
 
-def _find_credentials() -> tuple[dict, dict | None]:
-    """返回 (凭据 data, 该实例的 AdbDevice)。
+def _load_secret_file() -> dict:
+    path = get_runtime_paths().config_dir / SECRET_FILE
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        logger.exception(f"SecureTextInput: 读取 {path} 失败")
+        return {}
 
-    优先 task 级 option（启动游戏2），兼容旧版 请选择服务器.sub_options 里的账号密码。
-    """
+
+def _find_credentials() -> tuple[dict, dict | None]:
+    """返回 (凭据 data, 该实例的 AdbDevice)。"""
+    fallback_device = None
     for inst in _instance_files():
+        device = inst.get("AdbDevice") or {}
+        if fallback_device is None and device.get("AdbPath") and device.get("AdbSerial"):
+            fallback_device = device
         for task in inst.get("TaskItems", []):
             for opt in task.get("option", []):
                 if opt.get("name") == "账号密码":
                     data = opt.get("data") or {}
                     if data:
-                        return data, inst.get("AdbDevice") or {}
+                        return data, device
                 for sub in opt.get("sub_options", []):
                     if sub.get("name") == "账号密码":
                         data = sub.get("data") or {}
                         if data:
-                            return data, inst.get("AdbDevice") or {}
-    return {}, None
+                            return data, device
+    data = _load_secret_file()
+    if data:
+        logger.info("SecureTextInput: 使用 config/account_secret.json 兜底")
+        return data, fallback_device
+    return {}, fallback_device
 
 
 def _send_via_adb(text: str, device: dict | None) -> bool:

@@ -13,41 +13,6 @@
             "description": "<span style=\"color:deepskyblue;font-size:15px\">模拟器打开后，或登录页面，或忍三<strong>主界面</strong>均可使用：会尝试关掉常见弹窗，并领取<strong>每日签到</strong>与<strong>限定结神符</strong>。<br/><br/>暂不支持<strong>大版本签到</strong>页，系统会在一段时间后<strong>跳过该页</strong>；未签时主界面<strong>通常没有红点</strong>，大版本活动期间请到<strong>活动页</strong>自行补签。</span>"
         },
         {
-            "name": "启动游戏2",
-            "entry": "启动游戏entry",
-            "option": [
-                "请选择服务器",
-                "请选择区服",
-                "账号密码"
-            ],
-            "group": [
-                "daily"
-            ],
-            "description": "个人构建：官服账号密码登录。启动时在启动流程中接管小白工作室账密页；主任务「启动游戏」保持上游原样。",
-            "pipeline_override": {
-                "启动流程": {
-                    "next": [
-                        "启动应用",
-                        "识别登录",
-                        "账号登录识别页",
-                        "关闭选择区服页面交给上层处理",
-                        "需要更新",
-                        "等待更新完成",
-                        "同意隐私保护提示",
-                        "启动阶段拒绝好友邀请",
-                        "启动阶段奖励确定",
-                        "每日签到",
-                        "活动签到",
-                        "屏蔽所有组队邀请",
-                        "设置页面上滑",
-                        "处理登录活动弹窗",
-                        "启动游戏点击主页设置",
-                        "启动游戏识别到主页设置"
-                    ]
-                }
-            }
-        },
-        {
             "name": "通灵巡逻",
             "entry": "通灵巡逻entry",
             "option": [
@@ -1422,31 +1387,6 @@
                             "enabled": false
                         }
                     }
-                }
-            ]
-        },
-        "账号密码": {
-            "type": "input",
-            "label": "账号密码（官服）",
-            "description": "仅官服账号使用。密码以明文保存在客户端配置中，请勿分享配置目录或日志。",
-            "inputs": [
-                {
-                    "name": "账号",
-                    "label": "账号",
-                    "description": "游戏登录账号（手机号/邮箱/平台账号）。仅支持 ASCII 字母、数字与 _ . @ + -。",
-                    "default": "",
-                    "pipeline_type": "string",
-                    "verify": "^[A-Za-z0-9_.@+-]{0,64}$",
-                    "pattern_msg": "仅支持字母、数字与 _ . @ + -，最长 64 位"
-                },
-                {
-                    "name": "密码",
-                    "label": "密码",
-                    "description": "游戏登录密码。仅支持可见 ASCII 字符（不含空格与中文），请避免单引号。",
-                    "default": "",
-                    "pipeline_type": "string",
-                    "verify": "^[\\x21-\\x26\\x28-\\x7E]{0,64}$",
-                    "pattern_msg": "仅支持可见 ASCII 字符（不含空格/中文/单引号），最长 64 位"
                 }
             ]
         }

@@ -1,0 +1,138 @@
+# -*- coding: utf-8 -*-
+"""账号登录（方案B）：自定义任务「启动游戏2」读取账号密码并输入。
+
+优先级：
+1. 当前实例里「启动游戏2」任务级 option「账号密码」的数据；
+2. 兼容旧版 sub_option；
+3. 独立文件 config/account_secret.json（升级/任务状态迁移后的兜底）。
+
+不进入 pipeline/task param；日志只记录字段名和长度；adb 输入走 stdin。
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+
+from maa.agent.agent_server import AgentServer
+from maa.context import Context
+from maa.custom_action import CustomAction
+
+from utils import logger
+from utils.runtime_paths import get_runtime_paths
+
+FIELD_TO_KEY = {"account": "账号", "password": "密码"}
+SECRET_FILE = "account_secret.json"
+
+
+def _clean(text: str) -> bool:
+    if not text or len(text) > 64 or not text.isascii():
+        return False
+    return all(0x21 <= ord(ch) <= 0x7E and ch != "'" for ch in text)
+
+
+def _instance_files() -> list[dict]:
+    root = get_runtime_paths().project_root
+    instances_dir = root / "config" / "instances"
+    active = None
+    appsettings = root / "appsettings.json"
+    if appsettings.is_file():
+        try:
+            active = json.loads(appsettings.read_text(encoding="utf-8")).get("Instances.LastActive")
+        except Exception:
+            active = None
+    candidates = []
+    if active:
+        candidates.append(instances_dir / f"{active}.json")
+    candidates.extend(sorted(instances_dir.glob("*.json")))
+    out = []
+    for p in candidates:
+        if not p.is_file():
+            continue
+        try:
+            out.append(json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            logger.exception(f"SecureTextInput: 读取实例配置失败 {p}")
+    return out
+
+
+def _load_secret_file() -> dict:
+    path = get_runtime_paths().config_dir / SECRET_FILE
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        logger.exception(f"SecureTextInput: 读取 {path} 失败")
+        return {}
+
+
+def _find_credentials() -> tuple[dict, dict | None]:
+    """返回 (凭据 data, 该实例的 AdbDevice)。"""
+    fallback_device = None
+    for inst in _instance_files():
+        device = inst.get("AdbDevice") or {}
+        if fallback_device is None and device.get("AdbPath") and device.get("AdbSerial"):
+            fallback_device = device
+        for task in inst.get("TaskItems", []):
+            for opt in task.get("option", []):
+                if opt.get("name") == "账号密码":
+                    data = opt.get("data") or {}
+                    if data:
+                        return data, device
+                for sub in opt.get("sub_options", []):
+                    if sub.get("name") == "账号密码":
+                        data = sub.get("data") or {}
+                        if data:
+                            return data, device
+    data = _load_secret_file()
+    if data:
+        logger.info("SecureTextInput: 使用 config/account_secret.json 兜底")
+        return data, fallback_device
+    return {}, fallback_device
+
+
+def _send_via_adb(text: str, device: dict | None) -> bool:
+    adb = (device or {}).get("AdbPath")
+    serial = (device or {}).get("AdbSerial")
+    if not adb or not serial:
+        logger.error("SecureTextInput: 找不到 AdbPath/AdbSerial")
+        return False
+    result = subprocess.run(
+        [adb, "-s", serial, "shell"],
+        input=f"input text '{text}'\n",
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=20,
+        creationflags=0x08000000,
+    )
+    return result.returncode == 0
+
+
+@AgentServer.custom_action("SecureTextInput")
+class SecureTextInput(CustomAction):
+    def run(self, context: Context, argv: CustomAction.RunArg) -> CustomAction.RunResult:
+        try:
+            param = json.loads(argv.custom_action_param or "{}")
+            field = param.get("field", "")
+            if field not in FIELD_TO_KEY:
+                logger.error(f"SecureTextInput: 非法 field={field!r}")
+                return CustomAction.RunResult(success=False)
+
+            data, device = _find_credentials()
+            key = FIELD_TO_KEY[field]
+            text = str(data.get(key, ""))
+            if not _clean(text):
+                logger.error(f"SecureTextInput: {key} 为空或含不安全字符")
+                return CustomAction.RunResult(success=False)
+
+            if not _send_via_adb(text, device):
+                logger.error(f"SecureTextInput: adb 输入失败（{key}）")
+                return CustomAction.RunResult(success=False)
+            logger.info(f"SecureTextInput: {key} 已输入（长度 {len(text)}）")
+            return CustomAction.RunResult(success=True)
+        except Exception:
+            logger.exception("SecureTextInput 失败")
+            return CustomAction.RunResult(success=False)
